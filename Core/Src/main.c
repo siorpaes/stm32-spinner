@@ -23,7 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "usbd_hid.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -104,20 +104,34 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    int8_t mouse_step = 0;
+    int8_t mouse_gap = 1;
+    unsigned int timer_start;
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		//HAL_StatusTypeDef HAL_UART_Receive(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout)
-		err = HAL_UART_Receive(&huart1, uart_buffer, 4, 0xffffffff);
-#define MOUSE_STEP 3
-		if(uart_buffer[3] == 0x01){
-			HID_Buffer[1] = MOUSE_STEP;
-		}
-		else{
-			HID_Buffer[1] = -MOUSE_STEP;		
-		}
-			
-		USBD_HID_SendReport(&hUsbDeviceFS, HID_Buffer, 4);
+
+    timer_start = HAL_GetTick();
+		
+    while(HAL_GetTick() - timer_start < 8){
+      err = HAL_UART_Receive(&huart1, uart_buffer, 4, 0xffffff);
+      if(err == HAL_OK){
+        if(uart_buffer[3] == 0x01){
+          mouse_step += mouse_gap;
+        }
+        else{
+          mouse_step -= mouse_gap;
+        }
+
+        mouse_gap += 1;
+       }
+    }
+		
+    if(mouse_step){
+      HID_Buffer[1] = mouse_step;		
+      USBD_HID_SendReport(&hUsbDeviceFS, HID_Buffer, 4);
+    }
   }
   /* USER CODE END 3 */
 }
