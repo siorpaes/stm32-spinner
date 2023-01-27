@@ -54,11 +54,39 @@ static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
+volatile int8_t spinner_steps;
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/* Gets spinner steps and returns mouse steps */
+int8_t compute_steps(int8_t steps)
+{
+	int8_t sign = steps > 0 ? 1 : -1;
+	int8_t asteps = 0;
+	int i;
+	
+	for(i=0; i<steps * sign; i++){
+		asteps += i;
+	}
+	
+	return sign * asteps;
+}
+
+/* Alternative implemenetation with dedicated acceleration map */
+int8_t compute_steps2(int8_t steps)
+{
+	int8_t stepsmap[10] = {1, 2, 3, 5, 8, 12, 18, 22, 28, 35};
+	int8_t sign = steps > 0 ? 1 : -1;
+	int8_t index = (sign * steps) - 1;
+
+	if(index > 9)
+		return 40;
+	
+	return sign * stepsmap[index];
+}
 
 /* USER CODE END 0 */
 
@@ -71,8 +99,6 @@ int main(void)
   /* USER CODE BEGIN 1 */
 	extern USBD_HandleTypeDef hUsbDeviceFS;
 	uint8_t HID_Buffer[4] = {0, 1, 0, 0};
-	uint8_t uart_buffer[4];
-	HAL_StatusTypeDef err;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -98,14 +124,16 @@ int main(void)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
 
+  /* Configure UART1 to run in interrpt mode */
+	SET_BIT(huart1.Instance->CR3, USART_CR3_EIE);
+	SET_BIT(huart1.Instance->CR1, USART_CR1_PEIE | USART_CR1_RXNEIE);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    int8_t mouse_step = 0;
-    int8_t mouse_gap = 1;
     unsigned int timer_start;
 
     /* USER CODE END WHILE */
@@ -113,26 +141,18 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
     timer_start = HAL_GetTick();
-		
-    while(HAL_GetTick() - timer_start < 8){
-      err = HAL_UART_Receive(&huart1, uart_buffer, 4, 0xffffff);
-      if(err == HAL_OK){
-        if(uart_buffer[3] == 0x01){
-          mouse_step += mouse_gap;
-        }
-        else{
-          mouse_step -= mouse_gap;
-        }
+    spinner_steps = 0;
 
-        mouse_gap += 1;
-       }
-    }
-		
-    if(mouse_step){
-      HID_Buffer[1] = mouse_step;		
+    /* Wait 8ms */
+    while(HAL_GetTick() - timer_start < 8);
+
+    /* If data has been received over UART send report */
+    if(spinner_steps){
+      HID_Buffer[1] = compute_steps2(spinner_steps);
       USBD_HID_SendReport(&hUsbDeviceFS, HID_Buffer, 4);
+      HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
     }
-  }
+	}
   /* USER CODE END 3 */
 }
 
@@ -275,6 +295,8 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+/* Not using HAL for UART reception. Leave empty */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart){};
 
 /* USER CODE END 4 */
 
