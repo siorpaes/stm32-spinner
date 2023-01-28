@@ -41,6 +41,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim1;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
@@ -53,8 +55,12 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 volatile int8_t spinner_steps;
+volatile unsigned int timer_fired;
+volatile uint8_t spinner_data[64];
+unsigned int spinner_data_idx;
 
 /* USER CODE END PFP */
 
@@ -78,12 +84,15 @@ int8_t compute_steps(int8_t steps)
 /* Alternative implemenetation with dedicated acceleration map */
 int8_t compute_steps2(int8_t steps)
 {
-	int8_t stepsmap[10] = {1, 2, 3, 5, 8, 12, 18, 22, 28, 35};
+	static const int8_t stepsmap[10] = {1, 2, 3, 5, 8, 12, 18, 22, 28, 35};
 	int8_t sign = steps > 0 ? 1 : -1;
 	int8_t index = (sign * steps) - 1;
 
 	if(index > 9)
 		return 40;
+	
+	spinner_data[spinner_data_idx++] = sign * steps;
+	spinner_data_idx &= (64 - 1);
 	
 	return sign * stepsmap[index];
 }
@@ -122,11 +131,15 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_USB_DEVICE_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
   /* Configure UART1 to run in interrpt mode */
 	SET_BIT(huart1.Instance->CR3, USART_CR3_EIE);
 	SET_BIT(huart1.Instance->CR1, USART_CR1_PEIE | USART_CR1_RXNEIE);
+	
+	/* Start Timer */
+	HAL_TIM_Base_Start_IT(&htim1);
 
   /* USER CODE END 2 */
 
@@ -134,19 +147,18 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    unsigned int timer_start;
-
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
-    timer_start = HAL_GetTick();
     spinner_steps = 0;
 
-    /* Wait 8ms */
-    while(HAL_GetTick() - timer_start < 8);
+    /* Wait for timer */
+		while(timer_fired == 0)
+			__WFI();
+		timer_fired = 0;
 
-    /* If data has been received over UART send report */
+    /* If there's data from spinner compute and send USB report */
     if(spinner_steps){
       HID_Buffer[1] = compute_steps2(spinner_steps);
       USBD_HID_SendReport(&hUsbDeviceFS, HID_Buffer, 4);
@@ -196,6 +208,52 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 47;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 9999;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+
 }
 
 /**
@@ -249,7 +307,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 38400;
+  huart2.Init.BaudRate = 115200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -283,20 +341,27 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LD3_Pin|DBG1_Pin|DBG2_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : LD3_Pin */
-  GPIO_InitStruct.Pin = LD3_Pin;
+  /*Configure GPIO pins : LD3_Pin DBG1_Pin DBG2_Pin */
+  GPIO_InitStruct.Pin = LD3_Pin|DBG1_Pin|DBG2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LD3_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
 
 /* USER CODE BEGIN 4 */
 /* Not using HAL for UART reception. Leave empty */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart){};
+
+/* Notify timer period is over */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
+{
+	timer_fired = 1;
+	HAL_GPIO_TogglePin(DBG1_GPIO_Port, DBG1_Pin);
+}
 
 /* USER CODE END 4 */
 

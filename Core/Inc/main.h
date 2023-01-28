@@ -70,6 +70,10 @@ void Error_Handler(void);
 #define VCP_RX_GPIO_Port GPIOA
 #define LD3_Pin GPIO_PIN_3
 #define LD3_GPIO_Port GPIOB
+#define DBG1_Pin GPIO_PIN_4
+#define DBG1_GPIO_Port GPIOB
+#define DBG2_Pin GPIO_PIN_5
+#define DBG2_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
