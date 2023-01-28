@@ -9,7 +9,8 @@ Spinner acceleration table can be customized by editing the map in compute_steps
 ## TODO
 * <s> Use interrupt-driven UART acquisition </s>
 * <s> Add spinner acceleration support </s>
-* Add precise timer-based USB report triggering instead of SysTick
+* <s> Add precise timer-based USB report triggering instead of SysTick </s> 
 * Add documentation on hardware setup
 * Add Wireshark and Saleae logs
-* Add support for buttons
+* <s> Add support for button </s>
+

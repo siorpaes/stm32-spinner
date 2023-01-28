@@ -88,9 +88,13 @@ int8_t compute_steps2(int8_t steps)
 	int8_t sign = steps > 0 ? 1 : -1;
 	int8_t index = (sign * steps) - 1;
 
+	if(steps == 0)
+		return 0;
+	
 	if(index > 9)
 		return 40;
 	
+	/* Log data for debugging */
 	spinner_data[spinner_data_idx++] = sign * steps;
 	spinner_data_idx &= (64 - 1);
 	
@@ -108,6 +112,7 @@ int main(void)
   /* USER CODE BEGIN 1 */
 	extern USBD_HandleTypeDef hUsbDeviceFS;
 	uint8_t HID_Buffer[4] = {0, 1, 0, 0};
+	unsigned int button_pressed;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -145,21 +150,31 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	GPIO_PinState buttonState;
+	GPIO_PinState buttonOldState = GPIO_PIN_SET;
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
     spinner_steps = 0;
 
-    /* Wait for timer */
-		while(timer_fired == 0)
-			__WFI();
-		timer_fired = 0;
+    /* Wait for timer and read button */
+    while(timer_fired == 0){
+      buttonState = HAL_GPIO_ReadPin(BTN_GPIO_Port, BTN_Pin);
+      //HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, buttonState == GPIO_PIN_RESET ? GPIO_PIN_SET : GPIO_PIN_RESET);			
+    }
+    timer_fired = 0;
 
-    /* If there's data from spinner compute and send USB report */
-    if(spinner_steps){
+    if(buttonState == GPIO_PIN_RESET)
+      HID_Buffer[0] = 1;
+    else
+      HID_Buffer[0] = 0;
+
+    /* If there's data from spinner or button compute and send USB report */
+    if(spinner_steps || (buttonState != buttonOldState)){
+			buttonOldState = buttonState;
       HID_Buffer[1] = compute_steps2(spinner_steps);
       USBD_HID_SendReport(&hUsbDeviceFS, HID_Buffer, 4);
       HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
@@ -342,6 +357,12 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LD3_Pin|DBG1_Pin|DBG2_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : BTN_Pin */
+  GPIO_InitStruct.Pin = BTN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(BTN_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LD3_Pin DBG1_Pin DBG2_Pin */
   GPIO_InitStruct.Pin = LD3_Pin|DBG1_Pin|DBG2_Pin;
