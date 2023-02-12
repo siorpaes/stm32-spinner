@@ -84,21 +84,26 @@ int8_t compute_steps(int8_t steps)
 /* Alternative implemenetation with dedicated acceleration map */
 int8_t compute_steps2(int8_t steps)
 {
-	static const int8_t stepsmap[10] = {1, 2, 3, 5, 8, 12, 18, 22, 28, 35};
+  unsigned int speed = 2;
+  /* V1 */
+  static const int8_t stepsmap[10] = {1, 2, 3, 5, 8, 12, 18, 22, 28, 35};
+  /* V2 */
+  //static const int8_t stepsmap[10] = {1, 2, 3, 5, 7, 10, 14, 18, 25, 35};
+  
 	int8_t sign = steps > 0 ? 1 : -1;
 	int8_t index = (sign * steps) - 1;
 
 	if(steps == 0)
 		return 0;
 	
-	if(index > 9)
-		return 40;
+  if(index > 9)
+    return speed * 40;
 	
-	/* Log data for debugging */
-	spinner_data[spinner_data_idx++] = sign * steps;
-	spinner_data_idx &= (64 - 1);
+  /* Log data for debugging */
+  spinner_data[spinner_data_idx++] = sign * steps;
+  spinner_data_idx &= (64 - 1);
 	
-	return sign * stepsmap[index];
+  return speed * sign * stepsmap[index];
 }
 
 /* USER CODE END 0 */
@@ -110,9 +115,8 @@ int8_t compute_steps2(int8_t steps)
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	extern USBD_HandleTypeDef hUsbDeviceFS;
-	uint8_t HID_Buffer[4] = {0, 1, 0, 0};
-	unsigned int button_pressed;
+  extern USBD_HandleTypeDef hUsbDeviceFS;
+  uint8_t HID_Buffer[4] = {0, 1, 0, 0};
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -140,11 +144,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /* Configure UART1 to run in interrpt mode */
-	SET_BIT(huart1.Instance->CR3, USART_CR3_EIE);
-	SET_BIT(huart1.Instance->CR1, USART_CR1_PEIE | USART_CR1_RXNEIE);
+  SET_BIT(huart1.Instance->CR3, USART_CR3_EIE);
+  SET_BIT(huart1.Instance->CR1, USART_CR1_PEIE | USART_CR1_RXNEIE);
 	
-	/* Start Timer */
-	HAL_TIM_Base_Start_IT(&htim1);
+  /* Start Timer */
+  HAL_TIM_Base_Start_IT(&htim1);
 
   /* USER CODE END 2 */
 
@@ -174,7 +178,7 @@ int main(void)
 
     /* If there's data from spinner or button compute and send USB report */
     if(spinner_steps || (buttonState != buttonOldState)){
-			buttonOldState = buttonState;
+      buttonOldState = buttonState;
       HID_Buffer[1] = compute_steps2(spinner_steps);
       USBD_HID_SendReport(&hUsbDeviceFS, HID_Buffer, 4);
       HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
