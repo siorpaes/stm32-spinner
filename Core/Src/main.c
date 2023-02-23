@@ -86,9 +86,11 @@ int8_t compute_steps2(int8_t steps)
 {
   unsigned int speed = 2;
   /* V1 */
-  static const int8_t stepsmap[10] = {1, 2, 3, 5, 8, 12, 18, 22, 28, 35};
+  //static const int8_t stepsmap[10] = {1, 2, 3, 5, 8, 12, 18, 22, 28, 35};
   /* V2 */
   //static const int8_t stepsmap[10] = {1, 2, 3, 5, 7, 10, 14, 18, 25, 35};
+  /* V3 */
+  static const int8_t stepsmap[10] = {1, 2, 3, 5, 7, 10, 14, 18, 24, 30};
   
 	int8_t sign = steps > 0 ? 1 : -1;
 	int8_t index = (sign * steps) - 1;
